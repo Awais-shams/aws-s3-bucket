@@ -1,35 +1,41 @@
 require("dotenv").config({ path: "./src/config" });
-const S3 = require("aws-sdk/clients/s3");
-const fs = require("fs");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const Post = require("./src/models/postModel");
 
-const aws = {
-  bucketName: process.env.AWS_BUCKET_NAME,
-  region: process.env.AWS_BUCKET_REGION,
-  accessKey: process.env.AWS_ACCESS_KEY_ID,
-  secretKey: process.env.AWS_SECRET_ACCESS_KEY,
-};
+const bucketName = process.env.AWS_BUCKET_NAME;
+const region = process.env.AWS_BUCKET_REGION;
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
-const s3 = new S3({ aws });
+const s3Client = new S3Client({
+  credentials: {
+    accessKeyId,
+    secretAccessKey,
+  },
+  region,
+});
 
-function uploadFile(file) {
-  console.log("awais", file);
-  const fileStream = fs.createReadStream(file.path);
+async function uploadFile(req) {
+  // console.log("Awaissss", req.file);
+
   const uploadParams = {
-    Bucket: aws.bucketName,
-    Body: fileStream,
-    Key: file.filename,
+    Bucket: bucketName,
+    Body: req.file.buffer,
+    Key: req.file.originalname,
+    ContentType: req.file.mimetype,
   };
-  return s3.upload(uploadParams).promise();
+  // Send the upload to S3
+  await s3Client.send(new PutObjectCommand(uploadParams));
+
+  const storePost = await new Post({
+    post: req.file.originalname,
+    desc: req.body.desc,
+  });
+
+  storePost.save();
+
+  return storePost;
 }
 
-function getFile(fileKey) {
-  console.log("file key", fileKey);
-  const downloadParams = {
-    Key: fileKey,
-    Bucket: aws.bucketName,
-  };
 
-  return s3.getObject(downloadParams).createReadStream();
-}
-
-module.exports = { uploadFile, getFile };
+module.exports = { uploadFile };
